@@ -1,0 +1,75 @@
+name: Build & deploy Next.js app to Azure Web App
+
+# When this action will be executed
+on:
+  # Automatically trigger it when detected changes in repo
+  push:
+    branches: [main]
+
+  # Allow mannually trigger
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🌱 Checkout to the branch
+        uses: actions/checkout@v2
+
+      - name: 🍏 Set up Node.js version
+        uses: actions/setup-node@v1
+        with:
+          node-version: "18.x"
+
+      - name: ⚙️ npm install and build
+        run: |
+          npm install
+          npm run build --if-present
+
+      - name: 📂 Copy standalone into the root
+        run: cp -R .next/standalone ./site-deploy
+
+      - name: 📂 Copy static into the .next folder
+        run: cp -R .next/static ./site-deploy/.next/static
+
+      - name: 📂 Copy Public folder
+        run: cp -R public ./site-deploy/public
+
+      - name: 📦 Package Next application
+        run: |
+          cd site-deploy
+          zip Nextjs-site.zip ./* .next -qr
+
+      - name: ⬆️ Publish Next Application artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: Nextjs-site
+          path: ./site-deploy/Nextjs-site.zip
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    environment:
+      name: "Production"
+
+    steps:
+      - name: ⬇️ Download artifact from build job
+        uses: actions/download-artifact@v2
+        with:
+          name: Nextjs-site
+
+      - name: 🗝️ Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: 🚀 Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: ${{ secrets.AZURE_APP_SERVICE_NAME }}
+          package: ${{ github.workspace }}/Nextjs-site.zip
+
+      - name: 🧹 Cleanup
+        run: rm ${{ github.workspace }}/Nextjs-site.zip
