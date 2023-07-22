@@ -2,7 +2,10 @@
 import "server-only";
 
 import { userHashedId, userSession } from "@/features/auth/helpers";
-import { FindAllChats } from "@/features/chat/chat-service";
+import {
+  ChatMessageOutputModel,
+  FindAllChats,
+} from "@/features/chat/chat-service";
 import { SqlQuerySpec } from "@azure/cosmos";
 import { nanoid } from "nanoid";
 import { memoryContainer } from "../common/cosmos";
@@ -108,6 +111,21 @@ export const EnsureChatThreadIsForCurrentUser = async (
 export const UpsertChatThread = async (chatThread: ChatThreadModel) => {
   const container = await memoryContainer();
   return await container.items.upsert(chatThread);
+};
+
+export const updateChatThreadTitle = async (
+  chatThread: ChatThreadModel,
+  messages: ChatMessageOutputModel[],
+  modelName: string,
+  userMessage: string
+) => {
+  if (messages.length === 0) {
+    await UpsertChatThread({
+      ...chatThread,
+      model: modelName,
+      name: userMessage.substring(0, 30),
+    });
+  }
 };
 
 export const CreateChatThread = async (chatThread: ChatThreadInputModel) => {

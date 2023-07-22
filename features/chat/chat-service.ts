@@ -26,9 +26,11 @@ export const FindAllChats = async (chatThreadID: string) => {
       },
     ],
   };
+
   const { resources } = await container.items
     .query<ChatMessageOutputModel>(querySpec)
     .fetchAll();
+
   return resources;
 };
 
@@ -45,10 +47,27 @@ export const UpsertChat = async (chatModel: ChatMessageInputModel) => {
   await container.items.upsert(modelToSave);
 };
 
+export const inertPromptAndResponse = async (
+  threadID: string,
+  userQuestion: string,
+  assistantResponse: string
+) => {
+  await UpsertChat({
+    content: userQuestion,
+    threadId: threadID,
+    role: "user",
+  });
+  await UpsertChat({
+    content: assistantResponse,
+    threadId: threadID,
+    role: "assistant",
+  });
+};
+
 export interface ChatMessageInputModel {
   threadId: string;
   content: string;
-  role: "system" | "user" | "assistant";
+  role: chatRole;
 }
 
 export interface ChatMessageOutputModel extends ChatMessageInputModel {
@@ -60,3 +79,5 @@ export interface ChatMessageOutputModel extends ChatMessageInputModel {
 interface ChatMessageModel extends ChatMessageOutputModel {
   type: "CHAT_MESSAGE";
 }
+
+export type chatRole = "system" | "user" | "assistant" | "function";
