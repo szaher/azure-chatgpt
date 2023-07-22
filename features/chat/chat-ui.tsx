@@ -8,31 +8,18 @@ import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ToastAction } from "@/components/ui/toast";
 import { useToast } from "@/components/ui/use-toast";
-import { Message } from "ai";
 import { useChat } from "ai/react";
 import { useSession } from "next-auth/react";
 import { useParams } from "next/navigation";
 import { FC, FormEvent, useRef, useState } from "react";
 import { PromptGPTBody } from "./chat-api";
-import { ChatMessageOutputModel } from "./chat-service";
+import { transformCosmosToAIModel } from "./chat-helpers";
+import { ChatMessageModel } from "./chat-service";
 
 interface Prop {
-  chats: Array<ChatMessageOutputModel>;
+  chats: Array<ChatMessageModel>;
   model: string;
 }
-
-const transformModel = (
-  chats: Array<ChatMessageOutputModel>
-): Array<Message> => {
-  return chats.map((chat) => {
-    return {
-      role: chat.role,
-      content: chat.content,
-      id: chat.id,
-      createdAt: chat.createdAt,
-    };
-  });
-};
 
 export const ChatUI: FC<Prop> = (props) => {
   const { id } = useParams();
@@ -54,7 +41,7 @@ export const ChatUI: FC<Prop> = (props) => {
     onError,
     id,
     body: chatBody,
-    initialMessages: transformModel(props.chats),
+    initialMessages: transformCosmosToAIModel(props.chats),
   });
 
   const scrollRef = useRef<HTMLDivElement>(null);
