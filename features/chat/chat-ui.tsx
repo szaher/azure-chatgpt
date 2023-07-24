@@ -12,7 +12,7 @@ import { useChat } from "ai/react";
 import { useSession } from "next-auth/react";
 import { useParams } from "next/navigation";
 import { FC, FormEvent, useRef, useState } from "react";
-import { PromptGPTBody } from "./chat-api";
+import { PromptGPTBody } from "./chat-api-helpers";
 import { transformCosmosToAIModel } from "./chat-helpers";
 import { ChatMessageModel } from "./chat-service";
 
