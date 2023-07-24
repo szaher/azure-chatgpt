@@ -1,96 +1,67 @@
+import { LangChainStream, Message, StreamingTextResponse } from "ai";
+import { ChatOpenAI } from "langchain/chat_models/openai";
+import { HumanMessage, LLMResult, SystemMessage } from "langchain/schema";
+import { mostRecentMemory } from "./chat-helpers";
+import { FindAllChats, inertPromptAndResponse } from "./chat-service";
 import {
-  ChatThreadModel,
   EnsureChatThreadIsForCurrentUser,
-  UpsertChatThread,
-} from "@/features/chat/chat-thread-service";
-import {
-  AzureOpenAI,
-  ChatCompletionRequestMessage,
-} from "../common/azure-openai";
-import {
-  ChatMessageOutputModel,
-  FindAllChats,
-  UpsertChat,
-} from "./chat-service";
+  updateChatThreadTitle,
+} from "./chat-thread-service";
 
-export const PromptGPT = async (
-  threadID: string,
-  message: ChatMessageOutputModel,
-  model: string
-) => {
-  const chatThread = await EnsureChatThreadIsForCurrentUser(threadID);
-  const { content } = message as ChatMessageOutputModel;
-  const _messages = await FindAllChats(threadID);
-  await updateChatTitle(chatThread, _messages, model, content);
+export interface PromptGPTBody {
+  id: string; // thread id
+  model: string; // model name
+}
 
-  const azureOpenAI = new AzureOpenAI({
-    onCompletion: async (output) =>
-      await updateUserAndAssistant(threadID, content, output),
+export interface PromptGPTProps extends PromptGPTBody {
+  messages: Message[];
+}
+
+export const PromptGPT = async (props: PromptGPTProps) => {
+  const { messages, id, model } = props;
+  const chatThread = await EnsureChatThreadIsForCurrentUser(id);
+  const chats = await FindAllChats(id);
+
+  const { stream, handlers } = LangChainStream();
+  //last message
+  const message = messages[messages.length - 1];
+  await updateChatThreadTitle(chatThread, chats, model, message.content);
+
+  const memory = mostRecentMemory(chats, 10);
+
+  const chat = new ChatOpenAI({
+    temperature: 0,
+    streaming: true,
   });
 
-  const history = buildMemory(_messages, 10);
-  const useMessage: ChatCompletionRequestMessage = {
-    content: content,
-    role: "user",
-  };
+  chat.predictMessages(
+    [
+      new SystemMessage(`-You are AzureChatGPT who is a helpful AI Assistant.
+    - You will provide clear and concise queries, and you will respond with polite and professional answers.
+    - You will answer questions truthfully and accurately.`),
+      ...memory,
+      new HumanMessage(message.content),
+    ],
+    {},
+    [
+      {
+        ...handlers,
+        handleLLMEnd: async (
+          output: LLMResult,
+          runId: string,
+          parentRunId?: string | undefined,
+          tags?: string[] | undefined
+        ) => {
+          await handlers.handleLLMEnd(output, runId);
+          inertPromptAndResponse(
+            id,
+            message.content,
+            output.generations[0][0].text
+          );
+        },
+      },
+    ]
+  );
 
-  const systemMessage: ChatCompletionRequestMessage = {
-    content: `-You are AzureChatGPT who is a helpful AI Assistant.
-- You will provide clear and concise queries, and you will respond with polite and professional answers.
-- You will answer questions truthfully and accurately.`,
-    role: "system",
-  };
-
-  const stream = await azureOpenAI.createChatCompletion({
-    messages: [systemMessage, ...history, useMessage],
-    stream: true,
-  });
-
-  return new Response(stream);
-};
-
-const updateChatTitle = async (
-  chatThread: ChatThreadModel,
-  messages: ChatMessageOutputModel[],
-  modelName: string,
-  userMessage: string
-) => {
-  if (messages.length === 0) {
-    await UpsertChatThread({
-      ...chatThread,
-      model: modelName,
-      name: userMessage.substring(0, 30),
-    });
-  }
-};
-
-const buildMemory = (chats: ChatMessageOutputModel[], memorySize: number) => {
-  const memory = [
-    ...chats.slice(memorySize * -1).map((m) => {
-      const chat: ChatCompletionRequestMessage = {
-        content: m.content,
-        role: m.role,
-      };
-      return chat;
-    }),
-  ];
-
-  return memory;
-};
-
-const updateUserAndAssistant = async (
-  threadID: string,
-  userQuestion: string,
-  assistantResponse: string
-) => {
-  await UpsertChat({
-    content: userQuestion,
-    threadId: threadID,
-    role: "user",
-  });
-  await UpsertChat({
-    content: assistantResponse,
-    threadId: threadID,
-    role: "assistant",
-  });
+  return new StreamingTextResponse(stream);
 };
