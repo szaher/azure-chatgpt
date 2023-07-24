@@ -4,6 +4,16 @@ import { Embeddings } from "langchain/embeddings/base";
 import { VectorStore } from "langchain/vectorstores/base";
 import { nanoid } from "nanoid";
 
+// example index model below
+// export interface AzureCogDocumentIndex extends Record<string, unknown> {
+//     id: string;
+//     content: string;
+//     user: string;
+//     embedding?: number[];
+//     pageContent: string;
+//     metadata: any;
+//   }
+
 interface AzureSearchConfig {
   name: string;
   indexName: string;
@@ -94,8 +104,9 @@ export class AzureCogSearch<
     k?: number,
     filter?: AzureCogFilter,
     _callbacks: Callbacks | undefined = undefined
-  ) {
-    return super.similaritySearchWithScore(query, k, filter);
+  ): Promise<[Document, number][]> {
+    const embeddings = await this.embeddings.embedQuery(query);
+    return this.similaritySearchVectorWithScore(embeddings, k || 5, filter);
   }
 
   /**
