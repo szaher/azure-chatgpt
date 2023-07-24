@@ -22,13 +22,15 @@ interface AzureSearchConfig {
   vectorFieldName: string;
 }
 
-export interface DocumentSearchResponseModel<TModel> {
+interface DocumentSearchResponseModel<TModel> {
   value: TModel[];
 }
 
-export type DocumentSearchModel = {
+type DocumentSearchModel = {
   "@search.score": number;
 };
+
+export interface AzureCogDocument extends Record<string, unknown> {}
 
 type AzureCogVectorField = {
   value: number[];
@@ -55,19 +57,23 @@ type AzureCogRequestObject = {
 export class AzureCogSearch<
   TModel extends Record<string, unknown>
 > extends VectorStore {
-  private config: AzureSearchConfig;
+  private _config: AzureSearchConfig;
 
   constructor(embeddings: Embeddings, dbConfig: AzureSearchConfig) {
     super(embeddings, dbConfig);
-    this.config = dbConfig;
+    this._config = dbConfig;
   }
 
   _vectorstoreType(): string {
     return "azure-cog-search";
   }
 
+  get config(): AzureSearchConfig {
+    return this._config;
+  }
+
   get baseUrl(): string {
-    return `https://${this.config.name}.search.windows.net/indexes/${this.config.indexName}/docs`;
+    return `https://${this._config.name}.search.windows.net/indexes/${this._config.indexName}/docs`;
   }
 
   async addDocuments(documents: Document<TModel>[]): Promise<string[]> {
@@ -124,7 +130,7 @@ export class AzureCogSearch<
         id: nanoid(),
         content: document.pageContent,
         ...document,
-        [this.config.vectorFieldName]: vectors[i],
+        [this._config.vectorFieldName]: vectors[i],
       });
     });
 
@@ -132,11 +138,11 @@ export class AzureCogSearch<
       value: indexes,
     };
 
-    const url = `${this.baseUrl}/index?api-version=${this.config.apiVersion}`;
+    const url = `${this.baseUrl}/index?api-version=${this._config.apiVersion}`;
     const responseObj = await fetcher(
       url,
       documentIndexRequest,
-      this.config.apiKey
+      this._config.apiKey
     );
     return responseObj.value.map((doc: any) => doc.key);
   }
@@ -150,7 +156,7 @@ export class AzureCogSearch<
     k: number,
     filter?: AzureCogFilter
   ): Promise<[Document<TModel>, number][]> {
-    const url = `${this.baseUrl}/search?api-version=${this.config.apiVersion}`;
+    const url = `${this.baseUrl}/search?api-version=${this._config.apiVersion}`;
 
     const searchBody: AzureCogRequestObject = {
       search: filter?.search || "*",
@@ -163,7 +169,7 @@ export class AzureCogSearch<
     const resultDocuments = (await fetcher(
       url,
       searchBody,
-      this.config.apiKey
+      this._config.apiKey
     )) as DocumentSearchResponseModel<Document<TModel> & DocumentSearchModel>;
 
     return resultDocuments.value.map((doc) => [doc, doc["@search.score"] || 0]);
